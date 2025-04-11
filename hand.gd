@@ -1,23 +1,37 @@
-extends Node3D
+extends CharacterBody3D
 
-var target_item: RigidBody3D = null
-var is_grabbing: bool = false
+@export var grab_distance := 2.0
+@export var throw_force := 15.0
 
-func _process(delta):
-    if target_item and is_grabbing:
-        var target_pos = $RightHand.global_transform.origin
-        target_item.global_transform.origin = target_pos.lerp(target_item.global_transform.origin, 0.2)
-        target_item.rotation = $RightHand.global_transform.basis.get_rotation_quaternion()
+var current_interactable: Interactable
+var grabbed_object: Interactable
 
-func grab_item(item: RigidBody3D):
-    target_item = item
-    is_grabbing = true
-    $AnimationPlayer.play("grab")
-    target_item.collision_layer = 2
+func _physics_process(delta):
+    var space_state = get_world_3d().direct_space_state
+    var query = PhysicsRayQueryParameters3D.create(
+        $Camera3D.global_transform.origin,
+        $Camera3D.global_transform.origin + $Camera3D.global_transform.basis.z * -grab_distance
+    )
+    
+    var result = space_state.intersect_ray(query)
+    
+    if result:
+        current_interactable = result.collider as Interactable
+    else:
+        current_interactable = null
 
-func release_item():
-    is_grabbing = false
-    $AnimationPlayer.play("release")
-    if target_item:
-        target_item.collision_layer = 1
-        target_item = null
+func _input(event):
+    # Захват/отпускание
+    if event.is_action_pressed("grab"):
+        if current_interactable and not grabbed_object:
+            grabbed_object = current_interactable
+            grabbed_object.grab($HandPosition)
+            
+        elif grabbed_object:
+            var throw_dir = -$Camera3D.global_transform.basis.z
+            grabbed_object.release(throw_dir * throw_force)
+            grabbed_object = null
+    
+    # Взаимодействие
+    if event.is_action_pressed("interact") and current_interactable:
+        current_interactable.interact()
